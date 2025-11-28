@@ -2,7 +2,8 @@
 """
 Shopping Cart Library
 
-This library contains classes for data cleaning, feature engineering, and association rule analysis for shopping cart.
+This library contains classes for data cleaning, feature engineering,
+and association rule analysis for shopping cart.
 """
 
 import datetime as dt
@@ -84,6 +85,11 @@ class DataCleaner:
         Returns:
             pd.DataFrame: Cleaned UK dataset
         """
+        if self.df is None:
+            raise ValueError("Data not loaded. Please call load_data() first.")
+        
+        # Thêm cột TotalPrice
+        self.df["TotalPrice"] = self.df["Quantity"] * self.df["UnitPrice"]
 
         # Loại bỏ các hóa đơn bị hủy (bắt đầu bằng 'C')
         self.df = self.df[~self.df["InvoiceNo"].astype(str).str.startswith("C")]
@@ -105,8 +111,71 @@ class DataCleaner:
         """
         Create time-based features for analysis.
         """
+        if self.df_uk is None:
+            raise ValueError("Cleaned UK data not available. Call clean_data() first.")
+
         self.df_uk["DayOfWeek"] = self.df_uk["InvoiceDate"].dt.dayofweek
         self.df_uk["HourOfDay"] = self.df_uk["InvoiceDate"].dt.hour
+
+    def add_total_price(self):
+        """
+        Add TotalPrice column (Quantity * UnitPrice) to cleaned UK data.
+        """
+        if self.df_uk is None:
+            raise ValueError("Cleaned UK data not available. Call clean_data() first.")
+
+        self.df_uk["TotalPrice"] = self.df_uk["Quantity"] * self.df_uk["UnitPrice"]
+        return self.df_uk
+
+    def compute_rfm(self, snapshot_date=None):
+        """
+        Compute RFM (Recency, Frequency, Monetary) for each customer based on cleaned UK data.
+
+        Args:
+            snapshot_date (datetime or str, optional):
+                Reference date for Recency calculation.
+                - If None: use max(InvoiceDate) + 1 day.
+
+        Returns:
+            pd.DataFrame: RFM dataframe with columns [CustomerID, Recency, Frequency, Monetary]
+        """
+        if self.df_uk is None:
+            raise ValueError("Cleaned UK data not available. Call clean_data() first.")
+
+        df = self.df_uk.copy()
+
+        # Đảm bảo có TotalPrice
+        if "TotalPrice" not in df.columns:
+            df["TotalPrice"] = df["Quantity"] * df["UnitPrice"]
+
+        # Xác định snapshot_date
+        if snapshot_date is None:
+            snapshot_date = df["InvoiceDate"].max() + pd.Timedelta(days=1)
+        else:
+            # Cho phép truyền vào dạng string 'YYYY-MM-DD'
+            if isinstance(snapshot_date, str):
+                snapshot_date = pd.to_datetime(snapshot_date)
+
+        # Tính RFM
+        rfm = df.groupby("CustomerID").agg(
+            {
+                "InvoiceDate": lambda x: (snapshot_date - x.max()).days,  # Recency
+                "InvoiceNo": "nunique",  # Frequency
+                "TotalPrice": "sum",     # Monetary
+            }
+        )
+
+        rfm.rename(
+            columns={
+                "InvoiceDate": "Recency",
+                "InvoiceNo": "Frequency",
+                "TotalPrice": "Monetary",
+            },
+            inplace=True,
+        )
+
+        self.rfm_data = rfm.reset_index()
+        return self.rfm_data
 
     def save_cleaned_data(self, output_dir="../data/processed"):
         """
@@ -115,9 +184,14 @@ class DataCleaner:
         Args:
             output_dir (str): Output directory path
         """
+        if self.df_uk is None:
+            raise ValueError("Cleaned UK data not available. Call clean_data() first.")
+
         os.makedirs(output_dir, exist_ok=True)
-        self.df_uk.to_csv(f"{output_dir}/cleaned_uk_data.csv", index=False)
-        print(f"Đã lưu dữ liệu đã làm sạch: {output_dir}/cleaned_uk_data.csv")
+        output_path = f"{output_dir}/cleaned_uk_data.csv"
+        self.df_uk.to_csv(output_path, index=False)
+        print(f"Đã lưu dữ liệu đã làm sạch: {output_path}")
+
 
 # =========================================================
 # 2. BASKET PREPARER
@@ -132,17 +206,17 @@ class BasketPreparer:
     """
 
     def __init__(
-            self, 
-            df: pd.DataFrame,
-            invoice_col: str = "InvoiceNo",
-            item_col: str = "Description",
-            quantity_col: str = "Quantity",
-            ):
+        self,
+        df: pd.DataFrame,
+        invoice_col: str = "InvoiceNo",
+        item_col: str = "Description",
+        quantity_col: str = "Quantity",
+    ):
         """
         Initialize the BasketPreparer with cleaned dataframe.
 
         Args:
-            df (pd.DataFrame): Cleaned transaction-leval dataframe
+            df (pd.DataFrame): Cleaned transaction-level dataframe
             invoice_col (str): Column name for invoice number
             item_col (str): Column name for item description
             quantity_col (str): Column name for item quantity
@@ -171,7 +245,7 @@ class BasketPreparer:
 
         self.basket = basket
         return self.basket
-    
+
     def encode_basket(self, threshold: int = 1):
         """
         Encode the basket dataframe into boolean format.
@@ -182,27 +256,28 @@ class BasketPreparer:
         Returns:
             pd.DataFrame: Boolean encoded basket dataframe
         """
-    
+
         if self.basket is None:
             raise ValueError("Basket not created. Please run create_basket() first.")
         basket_bool = self.basket.applymap(lambda x: 1 if x >= threshold else 0)
         basket_bool = basket_bool.astype(bool)
         self.basket_bool = basket_bool
-        return self.basket_bool    
-    
-    def save_basket_bool(seff, output_path: str):
+        return self.basket_bool
+
+    def save_basket_bool(self, output_path: str):
         """
-        Save the boolean encoded basket dataframe to a CSV file.
+        Save the boolean encoded basket dataframe to a Parquet file.
 
         Args:
-            output_path (str): Path to save the CSV file
+            output_path (str): Path to save the Parquet file
         """
         if self.basket_bool is None:
             raise ValueError("Basket not encoded. Please call encode_basket() first.")
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        self.basket_bool.to_parquet(output_path)
+        basket_bool_to_save = self.basket_bool.reset_index(drop=True)
+
+        basket_bool_to_save.to_parquet(output_path, index=False)
         print(f"Đã lưu basket boolean: {output_path}")
-       
+
 
 # =========================================================
 # 3. APRIORI ASSOCIATION RULES MINER
@@ -212,16 +287,14 @@ class AssociationRulesMiner:
     """
     A class for mining association rules using the Apriori algorithm.
 
-    This class applies the Apriori algorithm to the basket data and extracts    
+    This class applies the Apriori algorithm to the basket data and extracts
     association rules based on specified metrics.
     """
 
-    def __init__(
-            self, 
-            basket_bool: pd.DataFrame
-            ):
+    def __init__(self, basket_bool: pd.DataFrame):
         """
         Initialize the AssociationRulesMiner with basket data.
+
         Args:
             basket_bool (pd.DataFrame): Boolean encoded basket dataframe
         """
@@ -230,13 +303,14 @@ class AssociationRulesMiner:
         self.rules = None
 
     def mine_frequent_itemsets(
-            self, 
-            min_support: float = 0.01,
-            max_len: int = None,
-            use_colnames: bool = True
-            ) -> pd.DataFrame:
+        self,
+        min_support: float = 0.01,
+        max_len: int = None,
+        use_colnames: bool = True,
+    ) -> pd.DataFrame:
         """
         Mine frequent itemsets using the Apriori algorithm.
+
         Returns:
             pd.DataFrame: DataFrame of frequent itemsets
         """
@@ -251,25 +325,28 @@ class AssociationRulesMiner:
         fi.sort_values(by="support", ascending=False, inplace=True)
         self.frequent_itemsets = fi
         return self.frequent_itemsets
-    
+
     def generate_rules(
-            self,
-            metric: str = "lift",
-            min_threshold: float = 1.0
-            ) -> pd.DataFrame:
+        self,
+        metric: str = "lift",
+        min_threshold: float = 1.0,
+    ) -> pd.DataFrame:
         """
         Generate association rules from frequent itemsets.
 
         Args:
             metric (str): Metric to evaluate the rules
-            min_threshold (float): Minimum threshold for the metric  
+            min_threshold (float): Minimum threshold for the metric
+
         Returns:
             pd.DataFrame: DataFrame of association rules
-        """   
+        """
 
         if self.frequent_itemsets is None:
-            raise ValueError("Frequent itemsets not mined. Please run mine_frequent_itemsets() first.") 
-        
+            raise ValueError(
+                "Frequent itemsets not mined. Please run mine_frequent_itemsets() first."
+            )
+
         rules = association_rules(
             self.frequent_itemsets,
             metric=metric,
@@ -279,7 +356,7 @@ class AssociationRulesMiner:
         rules = rules.sort_values(["lift", "confidence"], ascending=False)
         self.rules = rules
         return self.rules
-    
+
     @staticmethod
     def _frozenset_to_str(fs: frozenset) -> str:
         return ", ".join(sorted(list(fs)))
@@ -354,16 +431,18 @@ class AssociationRulesMiner:
         rules_df.to_csv(output_path, index=False)
         print(f"Đã lưu luật vào: {output_path}")
 
+
 # =========================================================
 # 4. DATA VISUALIZER
-# ========================================================= 
+# =========================================================
 
 class DataVisualizer:
     """
-    A class for creating visualizations for customer segmentation analysis.
+    A class for creating visualizations for customer segmentation and
+    shopping behavior analysis.
 
     This class provides methods for plotting various aspects of the data
-    including temporal patterns, customer behavior, and cluster analysis.
+    including temporal patterns, customer behavior, and RFM analysis.
     """
 
     def __init__(self):
@@ -406,7 +485,8 @@ class DataVisualizer:
         Plot purchase patterns by day and hour.
 
         Args:
-            df (pd.DataFrame): Dataframe with time features
+            df (pd.DataFrame): Dataframe with time features:
+                DayOfWeek, HourOfDay
         """
         plt.figure(figsize=(12, 5))
         day_hour_counts = (
@@ -424,7 +504,7 @@ class DataVisualizer:
         Plot top products by quantity and revenue.
 
         Args:
-            df (pd.DataFrame): Transaction dataframe
+            df (pd.DataFrame): Transaction dataframe (có Quantity, TotalPrice)
             top_n (int): Number of top products to show
         """
         # Top sản phẩm theo số lượng
@@ -460,7 +540,7 @@ class DataVisualizer:
         Plot customer behavior distributions.
 
         Args:
-            df (pd.DataFrame): Transaction dataframe
+            df (pd.DataFrame): Transaction dataframe with CustomerID, InvoiceNo, TotalPrice
         """
         # Số giao dịch trên mỗi khách hàng
         plt.figure(figsize=(10, 5))
@@ -488,7 +568,8 @@ class DataVisualizer:
         Plot RFM analysis visualizations.
 
         Args:
-            rfm_data (pd.DataFrame): RFM dataframe
+            rfm_data (pd.DataFrame): RFM dataframe with
+                columns ['CustomerID', 'Recency', 'Frequency', 'Monetary']
         """
         # RFM distributions
         fig, axes = plt.subplots(3, 1, figsize=(12, 10))
