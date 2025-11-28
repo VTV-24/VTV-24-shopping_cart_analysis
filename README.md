@@ -22,33 +22,35 @@ Phân tích dữ liệu bán lẻ để tìm ra mối quan hệ giữa các sả
 - Tự động hóa pipeline bằng **Papermill**
 
 ---
-```markdown
+
 ## Project Structure
-```
+
+```text
 shopping_cart_analysis/
 ├── data/
-│ ├── raw/
-│ │ └── online_retail.csv
-│ └── processed/
-│ ├── cleaned_uk_data.csv
-│ ├── basket_bool.parquet
-│ └── rules_apriori_filtered.csv
+│   ├── raw/
+│   │   └── online_retail.csv
+│   └── processed/
+│       ├── cleaned_uk_data.csv
+│       ├── basket_bool.parquet
+│       └── rules_apriori_filtered.csv
 │
 ├── notebooks/
-│ ├── preprocessing_and_eda.ipynb
-│ ├── basket_preparation.ipynb
-│ ├── apriori_modelling.ipynb
-│ └── runs/
-│ ├── preprocessing_and_eda_run.ipynb
-│ ├── basket_preparation_run.ipynb
-│ └── apriori_modelling_run.ipynb
+│   ├── preprocessing_and_eda.ipynb
+│   ├── basket_preparation.ipynb
+│   ├── apriori_modelling.ipynb
+│   └── runs/
+│       ├── preprocessing_and_eda_run.ipynb
+│       ├── basket_preparation_run.ipynb
+│       └── apriori_modelling_run.ipynb
 │
 ├── src/
-│ └── shopping_cart_library.py
+│   └── shopping_cart_library.py
 │
 ├── run_papermill.py
 ├── requirements.txt
 └── README.md
+```
 
 ---
 
