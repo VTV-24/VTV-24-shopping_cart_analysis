@@ -1,9 +1,14 @@
 import papermill as pm
 import os
 
+# Tạo thư mục output nếu chưa có
 os.makedirs("notebooks/runs", exist_ok=True)
 
-# run_preprocessing_and_eda.py
+KERNEL_NAME = "venv"   # 🔴 kernel đã đăng ký bằng ipykernel
+
+# =====================================================
+# 1. Preprocessing + EDA
+# =====================================================
 pm.execute_notebook(
     "notebooks/preprocessing_and_eda.ipynb",
     "notebooks/runs/preprocessing_and_eda_run.ipynb",
@@ -11,32 +16,38 @@ pm.execute_notebook(
         DATA_PATH="data/raw/online_retail.csv",
         COUNTRY="United Kingdom",
         OUTPUT_DIR="data/processed",
-        PLOT_REVENUE=False,         # tắt bớt plot khi chạy batch
+
+        # Tắt bớt plot khi chạy batch
+        PLOT_REVENUE=False,
         PLOT_TIME_PATTERNS=False,
         PLOT_PRODUCTS=False,
         PLOT_CUSTOMERS=False,
         PLOT_RFM=False,
     ),
-    kernel_name="python3",
+    kernel_name=KERNEL_NAME,
 )
 
-# run_basket_preparation.py
-
+# =====================================================
+# 2. Basket Preparation
+# =====================================================
 pm.execute_notebook(
     "notebooks/basket_preparation.ipynb",
     "notebooks/runs/basket_preparation_run.ipynb",
     parameters=dict(
         CLEANED_DATA_PATH="data/processed/cleaned_uk_data.csv",
         BASKET_BOOL_PATH="data/processed/basket_bool.parquet",
+
         INVOICE_COL="InvoiceNo",
         ITEM_COL="Description",
         QUANTITY_COL="Quantity",
         THRESHOLD=1,
     ),
-    kernel_name="python3",
+    kernel_name=KERNEL_NAME,
 )
 
-# Chạy Notebook Apriori Modelling
+# =====================================================
+# 3. Apriori Modelling
+# =====================================================
 pm.execute_notebook(
     "notebooks/apriori_modelling.ipynb",
     "notebooks/runs/apriori_modelling_run.ipynb",
@@ -62,13 +73,13 @@ pm.execute_notebook(
         # Số luật để vẽ
         TOP_N_RULES=20,
 
-        # Tắt plot khi chạy batch (bật = True nếu muốn xem hình)
+        # Tắt plot khi chạy batch
         PLOT_TOP_LIFT=False,
         PLOT_TOP_CONF=False,
         PLOT_SCATTER=False,
         PLOT_NETWORK=False,
     ),
-    kernel_name="python3",
+    kernel_name=KERNEL_NAME,
 )
 
-print("Đã chạy xong pipeline")
+print("✅ Đã chạy xong toàn bộ pipeline Papermill")
