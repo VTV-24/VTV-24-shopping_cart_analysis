@@ -304,7 +304,7 @@ class AssociationRulesMiner:
 
     def mine_frequent_itemsets(
         self,
-        min_support: float = 0.05,
+        min_support: float = 0.02,
         max_len: int = None,
         use_colnames: bool = True,
     ) -> pd.DataFrame:
@@ -314,13 +314,14 @@ class AssociationRulesMiner:
         Returns:
             pd.DataFrame: DataFrame of frequent itemsets
         """
-
         fi = apriori(
             self.basket_bool,
             min_support=min_support,
             use_colnames=use_colnames,
             max_len=max_len,
+            low_memory=True
         )
+
 
         fi.sort_values(by="support", ascending=False, inplace=True)
         self.frequent_itemsets = fi
